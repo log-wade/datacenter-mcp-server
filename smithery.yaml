@@ -1,0 +1,32 @@
+name: datacenter-mcp-server
+description: |
+  Mission-critical data center engineering MCP server. 8 professional calculation tools
+  for cooling loads, power redundancy, GPU thermal optimization, UPS/battery sizing,
+  tier classification, commissioning workflows, and rack density analysis.
+author: NextGen Mission Critical
+license: MIT
+version: 1.0.0
+transport: stdio
+command: npx
+args:
+  - -y
+  - datacenter-mcp-server
+tags:
+  - data-center
+  - engineering
+  - cooling
+  - power
+  - hvac
+  - gpu
+  - ups
+  - infrastructure
+  - mission-critical
+tools:
+  - dc_calculate_cooling_load
+  - dc_analyze_power_redundancy
+  - dc_assess_tier_classification
+  - dc_generate_commissioning_plan
+  - dc_analyze_rack_density
+  - dc_gpu_cooling_optimizer
+  - dc_ups_battery_sizing
+  - dc_reference_lookup

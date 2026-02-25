@@ -1,0 +1,16 @@
+src/
+tests/
+.actor/
+*.ts
+!dist/**/*.js
+tsconfig.json
+jest.config.js
+coverage/
+.env
+.env.*
+*.docx
+*.jsx
+Launch_Roadmap.docx
+Accelerated_Revenue_Strategy.docx
+Zero_Burn_Revenue_Strategy.docx
+Landing_Page.jsx

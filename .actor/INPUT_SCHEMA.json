@@ -1,0 +1,50 @@
+{
+  "title": "Data Center MCP Server Input",
+  "description": "Configuration parameters for the Data Center Engineering MCP Server",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "API_KEY": {
+      "title": "API Key (Optional)",
+      "description": "Optional API key for authentication. Use if deploying with a managed service that requires API keys.",
+      "type": "string",
+      "editor": "hidden",
+      "isSecret": true,
+      "default": ""
+    },
+    "RATE_LIMIT_RPM": {
+      "title": "Rate Limit (requests per minute)",
+      "description": "Maximum number of requests allowed per minute. Default is 100 requests/minute. Increase for higher throughput needs, decrease to reduce server load.",
+      "type": "integer",
+      "default": 100,
+      "minimum": 1,
+      "maximum": 1000,
+      "unit": "requests/minute"
+    },
+    "PORT": {
+      "title": "Server Port",
+      "description": "HTTP port number to run the MCP server on. Default is 3000. Must be between 1024 and 65535 (avoid system ports below 1024).",
+      "type": "integer",
+      "default": 3000,
+      "minimum": 1024,
+      "maximum": 65535,
+      "unit": "port"
+    },
+    "REQUEST_TIMEOUT_MS": {
+      "title": "Request Timeout (milliseconds)",
+      "description": "Maximum time in milliseconds to allow for request processing. Default is 30000ms (30 seconds).",
+      "type": "integer",
+      "default": 30000,
+      "minimum": 5000,
+      "maximum": 300000
+    },
+    "ENABLE_METRICS": {
+      "title": "Enable Metrics Collection",
+      "description": "Enable collection of performance metrics and request statistics",
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [],
+  "additionalProperties": false
+}

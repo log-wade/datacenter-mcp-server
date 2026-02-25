@@ -1,0 +1,53 @@
+{
+  "actorSpecVersion": 1,
+  "name": "datacenter-mcp-server",
+  "title": "Data Center Engineering MCP Server",
+  "description": "Mission-critical data center design & engineering tools for AI agents. This MCP server exposes six powerful tools: cooling load calculations (kW, tons, BTU, CFM with PUE and altitude derating), power redundancy analysis (UPS, generator, PDU sizing for N/N+1/2N/2N+1), tier classification assessments (Uptime Institute Tier I-IV gap analysis), commissioning plan generation (ASHRAE-based with test procedures), rack density analysis (air/containment/liquid cooling recommendations), and reference lookups for tier requirements and PUE benchmarks. Perfect for infrastructure planning, capacity modeling, and data center operational analysis.",
+  "version": "1.0.0",
+  "buildTag": "latest",
+  "category": "ENGINEERING",
+  "isPublic": true,
+  "sortKey": "NEWEST",
+  "author": {
+    "name": "NextGen Mission Critical"
+  },
+  "inputs": {
+    "schema": {
+      "type": "object",
+      "schemaVersion": 1,
+      "properties": {
+        "API_KEY": {
+          "title": "API Key (Optional)",
+          "description": "Optional API key for authentication if using with a managed service",
+          "type": "string",
+          "editor": "hidden",
+          "isSecret": true
+        },
+        "RATE_LIMIT_RPM": {
+          "title": "Rate Limit (requests per minute)",
+          "description": "Maximum requests allowed per minute (default: 100)",
+          "type": "integer",
+          "default": 100,
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "PORT": {
+          "title": "Server Port",
+          "description": "HTTP port to run the MCP server on (default: 3000)",
+          "type": "integer",
+          "default": 3000,
+          "minimum": 1024,
+          "maximum": 65535
+        }
+      },
+      "required": []
+    }
+  },
+  "dockerfile": ".actor/Dockerfile",
+  "gitHubGist": "",
+  "readme": ".actor/README.md",
+  "exampleRunInput": {
+    "RATE_LIMIT_RPM": 100,
+    "PORT": 3000
+  }
+}
