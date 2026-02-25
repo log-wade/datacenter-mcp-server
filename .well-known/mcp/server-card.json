@@ -1,0 +1,47 @@
+{
+  "name": "datacenter-mcp-server",
+  "description": "Mission-critical data center engineering MCP server. 8 professional calculation tools for cooling loads, power redundancy, GPU thermal optimization, UPS/battery sizing, tier classification, commissioning workflows, rack density analysis, and reference lookup.",
+  "version": "1.0.0",
+  "author": "NextGen Mission Critical",
+  "homepage": "https://github.com/log-wade/datacenter-mcp-server",
+  "repository": "https://github.com/log-wade/datacenter-mcp-server",
+  "license": "MIT",
+  "transport": ["stdio"],
+  "install": {
+    "npm": "datacenter-mcp-server"
+  },
+  "tools": [
+    {
+      "name": "dc_calculate_cooling_load",
+      "description": "Calculate ASHRAE-compliant cooling requirements including tonnage, airflow, and chilled water capacity"
+    },
+    {
+      "name": "dc_analyze_power_redundancy",
+      "description": "Analyze electrical distribution with N/N+1/2N/2N+1 redundancy configurations"
+    },
+    {
+      "name": "dc_assess_tier_classification",
+      "description": "Evaluate facility design against Uptime Institute Tier I-IV standards"
+    },
+    {
+      "name": "dc_generate_commissioning_plan",
+      "description": "Generate L1-L5 commissioning workflows per ASHRAE Guideline 0"
+    },
+    {
+      "name": "dc_analyze_rack_density",
+      "description": "Analyze rack power density from 5-100+ kW with cooling strategy selection"
+    },
+    {
+      "name": "dc_gpu_cooling_optimizer",
+      "description": "Optimize cooling for GPU/AI workloads (H100, A100, H200, B200, GB200)"
+    },
+    {
+      "name": "dc_ups_battery_sizing",
+      "description": "Size UPS and battery systems with VRLA vs lithium-ion TCO comparison"
+    },
+    {
+      "name": "dc_reference_lookup",
+      "description": "Query ASHRAE standards, Uptime Institute requirements, and industry best practices"
+    }
+  ]
+}
