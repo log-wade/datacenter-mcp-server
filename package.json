@@ -14,9 +14,9 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/nextgen-mission-critical/datacenter-mcp-server"
+    "url": "https://github.com/log-wade/datacenter-mcp-server"
   },
-  "homepage": "https://github.com/nextgen-mission-critical/datacenter-mcp-server#readme",
+  "homepage": "https://github.com/log-wade/datacenter-mcp-server#readme",
   "scripts": {
     "prepublishOnly": "npm run build",
     "build": "tsc",
