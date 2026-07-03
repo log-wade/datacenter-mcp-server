@@ -21,6 +21,10 @@ export const UPSSizingSchema = z.object({
     .min(1.0).max(2.0)
     .default(1.2)
     .describe("Design growth factor for future expansion (default: 1.2 = 20% growth margin)"),
+  aging_factor: z.number()
+    .min(1.0).max(1.5)
+    .default(1.25)
+    .describe("End-of-life aging factor per IEEE 485 practice (default: 1.25 — batteries must meet load at end of life)"),
 }).strict();
 
 export type UPSSizingParams = z.infer<typeof UPSSizingSchema>;

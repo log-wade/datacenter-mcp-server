@@ -57,38 +57,47 @@ function getUPSModuleCount(
   }
 }
 
-function calculateBatteryStringCount(
-  design_load_kw: number,
-  runtime_minutes: number,
-  ups_efficiency: number,
-  battery_type: BatteryType
-): number {
-  // Total energy needed (kWh) = design_load * (runtime_minutes / 60) / ups_efficiency
-  const total_energy_needed_kwh =
-    (design_load_kw * (runtime_minutes / 60)) / ups_efficiency;
+// ─── Rate derating (fixed 2026-07-03, CODE-AUDIT.md CRITICAL-1/2) ─────────
+// Batteries deliver far less than nameplate energy at short constant-power
+// discharges. Usable fraction of nameplate (20-hr) stored energy vs runtime:
+//
+// VRLA curve derived from Power-Sonic PHR-12550 (12V/155Ah high-rate UPS bloc)
+// published constant-power table @ 1.67 V/cell end voltage — e.g. 15 min:
+// 540.1 W/cell × 6 cells × 0.25 h ÷ 1,860 Wh nameplate = 0.44 usable.
+// Source: power-sonic.com/product/phr-12550 (retrieved 2026-07-03).
+//
+// Li-ion curve is a CONSERVATIVE ESTIMATE (usable DoD + high-rate losses) —
+// verify against the selected manufacturer's data before removing beta label.
+const RATE_DERATING: Record<BatteryType, ReadonlyArray<readonly [number, number]>> = {
+  VRLA: [
+    [5, 0.23], [10, 0.34], [15, 0.44], [20, 0.49], [30, 0.56],
+    [45, 0.62], [60, 0.66], [90, 0.71], [120, 0.75],
+  ],
+  lithium_ion: [
+    [5, 0.80], [10, 0.83], [15, 0.85], [30, 0.87], [60, 0.88], [120, 0.90],
+  ],
+};
 
-  if (battery_type === "VRLA") {
-    const energy_per_string_kwh =
-      (BATTERY_SPECS.VRLA.cells_per_string *
-        BATTERY_SPECS.VRLA.energy_per_cell_wh) /
-      1000;
-    return Math.ceil(total_energy_needed_kwh / energy_per_string_kwh);
-  } else {
-    const energy_per_string_kwh =
-      (BATTERY_SPECS.lithium_ion.modules_per_string *
-        BATTERY_SPECS.lithium_ion.energy_per_module_wh) /
-      1000;
-    return Math.ceil(total_energy_needed_kwh / energy_per_string_kwh);
+export const DEFAULT_AGING_FACTOR = 1.25; // IEEE 485 practice: size for end-of-life
+
+function getUsableFraction(battery_type: BatteryType, runtime_minutes: number): number {
+  const curve = RATE_DERATING[battery_type];
+  if (runtime_minutes <= curve[0][0]) return curve[0][1];
+  for (let i = 1; i < curve.length; i++) {
+    if (runtime_minutes <= curve[i][0]) {
+      const [t0, f0] = curve[i - 1];
+      const [t1, f1] = curve[i];
+      return f0 + ((runtime_minutes - t0) / (t1 - t0)) * (f1 - f0);
+    }
   }
+  return curve[curve.length - 1][1];
 }
 
-function calculateTotalBatteryEnergy(
-  design_load_kw: number,
-  runtime_minutes: number,
-  ups_efficiency: number
-): number {
-  // Total energy needed (kWh) = design_load * (runtime_minutes / 60) / ups_efficiency
-  return (design_load_kw * (runtime_minutes / 60)) / ups_efficiency;
+function getEnergyPerStringKwh(battery_type: BatteryType): number {
+  if (battery_type === "VRLA") {
+    return (BATTERY_SPECS.VRLA.cells_per_string * BATTERY_SPECS.VRLA.energy_per_cell_wh) / 1000;
+  }
+  return (BATTERY_SPECS.lithium_ion.modules_per_string * BATTERY_SPECS.lithium_ion.energy_per_module_wh) / 1000;
 }
 
 function buildUPSModuleConfiguration(
@@ -112,49 +121,46 @@ function buildBatteryStringConfiguration(
   design_load_kw: number,
   runtime_minutes: number,
   ups_efficiency: number,
-  battery_type: BatteryType
+  battery_type: BatteryType,
+  aging_factor: number,
+  independent_bus_count: number
 ): BatteryStringConfiguration {
-  const strings_required = calculateBatteryStringCount(
-    design_load_kw,
-    runtime_minutes,
-    ups_efficiency,
-    battery_type
-  );
-  const total_energy_kwh = calculateTotalBatteryEnergy(
-    design_load_kw,
-    runtime_minutes,
-    ups_efficiency
-  );
+  // Energy the load draws through the UPS during the runtime window.
+  const deliverable_energy_kwh =
+    (design_load_kw * (runtime_minutes / 60)) / ups_efficiency;
 
-  if (battery_type === "VRLA") {
-    const energy_per_string_kwh =
-      (BATTERY_SPECS.VRLA.cells_per_string *
-        BATTERY_SPECS.VRLA.energy_per_cell_wh) /
-      1000;
+  // Required NAMEPLATE energy per bus: rate derating + end-of-life aging.
+  const rate_derating_factor = getUsableFraction(battery_type, runtime_minutes);
+  const nameplate_per_bus_kwh =
+    (deliverable_energy_kwh / rate_derating_factor) * aging_factor;
 
-    return {
-      battery_type: "VRLA",
-      cells_or_modules_per_string: BATTERY_SPECS.VRLA.cells_per_string,
-      nominal_voltage: BATTERY_SPECS.VRLA.nominal_voltage,
-      energy_per_unit_wh: BATTERY_SPECS.VRLA.energy_per_cell_wh,
-      strings_required,
-      total_battery_energy_kwh: Math.round(total_energy_kwh * 100) / 100,
-    };
-  } else {
-    const energy_per_string_kwh =
-      (BATTERY_SPECS.lithium_ion.modules_per_string *
-        BATTERY_SPECS.lithium_ion.energy_per_module_wh) /
-      1000;
+  const energy_per_string_kwh = getEnergyPerStringKwh(battery_type);
+  const strings_per_bus = Math.ceil(nameplate_per_bus_kwh / energy_per_string_kwh);
 
-    return {
-      battery_type: "lithium_ion",
-      cells_or_modules_per_string: BATTERY_SPECS.lithium_ion.modules_per_string,
-      nominal_voltage: BATTERY_SPECS.lithium_ion.nominal_voltage,
-      energy_per_unit_wh: BATTERY_SPECS.lithium_ion.energy_per_module_wh,
-      strings_required,
-      total_battery_energy_kwh: Math.round(total_energy_kwh * 100) / 100,
-    };
-  }
+  // Fixed 2026-07-03 (CODE-AUDIT.md MAJOR-1): dual-bus topologies (2N/2N+1)
+  // require a full battery plant per bus.
+  const total_nameplate_kwh = nameplate_per_bus_kwh * independent_bus_count;
+
+  const specs = BATTERY_SPECS[battery_type];
+  return {
+    battery_type,
+    cells_or_modules_per_string:
+      battery_type === "VRLA"
+        ? BATTERY_SPECS.VRLA.cells_per_string
+        : BATTERY_SPECS.lithium_ion.modules_per_string,
+    nominal_voltage: specs.nominal_voltage,
+    energy_per_unit_wh:
+      battery_type === "VRLA"
+        ? BATTERY_SPECS.VRLA.energy_per_cell_wh
+        : BATTERY_SPECS.lithium_ion.energy_per_module_wh,
+    strings_required: strings_per_bus * independent_bus_count,
+    total_battery_energy_kwh: Math.round(total_nameplate_kwh * 100) / 100,
+    deliverable_energy_kwh: Math.round(deliverable_energy_kwh * 100) / 100,
+    rate_derating_factor: Math.round(rate_derating_factor * 1000) / 1000,
+    aging_factor,
+    independent_bus_count,
+    strings_per_bus,
+  };
 }
 
 function buildBatteryRoomFootprint(
@@ -224,6 +230,7 @@ export function calculateUPSSizing(input: UPSSizingInput): UPSSizingResult {
     battery_type,
     ups_efficiency = 0.96,
     growth_factor = 1.2,
+    aging_factor = DEFAULT_AGING_FACTOR,
   } = input;
 
   // Step 1: Calculate design load with growth factor
@@ -235,12 +242,16 @@ export function calculateUPSSizing(input: UPSSizingInput): UPSSizingResult {
     redundancy
   );
 
-  // Step 3: Build battery string configuration
+  // Step 3: Build battery string configuration (rate-derated, aged, per bus)
+  const independent_bus_count =
+    redundancy === "2N" || redundancy === "2N+1" ? 2 : 1;
   const battery_configuration = buildBatteryStringConfiguration(
     design_load_kw,
     runtime_minutes,
     ups_efficiency,
-    battery_type
+    battery_type,
+    aging_factor,
+    independent_bus_count
   );
 
   // Step 4: Build battery room footprint
@@ -282,6 +293,10 @@ export function calculateUPSSizing(input: UPSSizingInput): UPSSizingResult {
   // Step 7: Generate recommendations
   const recommendations: string[] = [];
   const warnings: string[] = [];
+
+  recommendations.push(
+    `Sizing methodology: constant-power rate derating applied — ${((battery_configuration.rate_derating_factor ?? 1) * 100).toFixed(0)}% of nameplate energy usable at ${runtime_minutes}-min rate (VRLA curve from Power-Sonic PHR-12550 published discharge data; Li-ion curve is a conservative estimate) × ${aging_factor} end-of-life aging factor (IEEE 485 practice) × ${independent_bus_count} independent battery bus(es). Verify final sizing against the selected manufacturer's discharge tables — this is a planning estimate, not a construction document.`
+  );
 
   // Fixed 2026-07-03 (CODE-AUDIT.md MAJOR-2): threshold aligned with message (80%),
   // and low-loading "right-size" advice suppressed for dual-bus topologies —
