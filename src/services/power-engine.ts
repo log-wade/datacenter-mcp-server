@@ -86,7 +86,9 @@ export function calculatePowerRedundancy(input: PowerRedundancyInput): PowerRedu
       `UPS loading at ${ups_load_percentage.toFixed(1)}% exceeds recommended 80% threshold. Consider larger modules or additional capacity`
     );
   }
-  if (ups_load_percentage < 40) {
+  // Fixed 2026-07-03 (CODE-AUDIT.md MAJOR-2): low-loading advice suppressed for
+  // dual-bus topologies — 2N/2N+1 loading is intentionally <50% by design.
+  if (ups_load_percentage < 40 && redundancy_config !== "2N" && redundancy_config !== "2N+1") {
     recommendations.push(
       `UPS loading at ${ups_load_percentage.toFixed(1)}% is low. Consider smaller modules for better efficiency (UPS efficiency drops below ~40% load)`
     );
