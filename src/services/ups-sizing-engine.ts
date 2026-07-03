@@ -283,12 +283,16 @@ export function calculateUPSSizing(input: UPSSizingInput): UPSSizingResult {
   const recommendations: string[] = [];
   const warnings: string[] = [];
 
-  if (ups_configuration.loading_percentage > 85) {
+  // Fixed 2026-07-03 (CODE-AUDIT.md MAJOR-2): threshold aligned with message (80%),
+  // and low-loading "right-size" advice suppressed for dual-bus topologies —
+  // a 2N system at ~50% loading is correct by design, not oversized.
+  const dual_bus = redundancy === "2N" || redundancy === "2N+1";
+  if (ups_configuration.loading_percentage > 80) {
     warnings.push(
       `UPS loading is ${ups_configuration.loading_percentage.toFixed(1)}%, above recommended 80% max. Consider adding modules or splitting load across multiple UPS systems.`
     );
   }
-  if (ups_configuration.loading_percentage < 50) {
+  if (ups_configuration.loading_percentage < 50 && !dual_bus) {
     recommendations.push(
       `UPS loading is only ${ups_configuration.loading_percentage.toFixed(1)}%. Growth margin is healthy but consider right-sizing to improve efficiency and reduce capital cost.`
     );

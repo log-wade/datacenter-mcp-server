@@ -1,0 +1,38 @@
+# CI gate — nothing merges to main unless this passes.
+# This is the ONE LANE rule as machinery: applies to humans, Cursor agents,
+# Claude Code, and dependabot equally.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck (src + api + tests — api/ was previously excluded and shipped broken)
+        run: npx tsc -p tsconfig.ci.json
+
+      - name: Tests (structural + golden)
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # Golden tests marked it.skip are pending physics fixes (see CODE-AUDIT.md).
+      # When a fix lands, the PR must flip the corresponding it.skip → it.
+      # Guard: fail if anyone deletes the golden directory instead of fixing math.
+      - name: Golden tests present
+        run: test -d tests/golden && ls tests/golden/*.test.ts

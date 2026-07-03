@@ -92,11 +92,12 @@ function calculateCoolantFlowRate(
   power_kw: number,
   delta_t_f: number = 15
 ): number {
-  // Q = P / (500 * deltaT)
-  // where Q is in GPM, P is in kW, deltaT is in °F (typical 15°F supply-return delta)
-  // 500 is the BTU heat capacity factor (BTU/min per GPM per °F)
+  // Water-side sensible heat: Q(BTU/hr) = 500 × GPM × ΔT°F
+  //   (500 ≈ 8.33 lb/gal × 60 min/hr × 1.0 BTU/lb·°F)
+  // → GPM = kW × 3412 / (500 × ΔT). At ΔT = 15°F ≈ 0.455 GPM per kW.
+  // Fixed 2026-07-03 (CODE-AUDIT.md CRITICAL-3): previous formula overstated flow ~3.5×.
   if (delta_t_f <= 0) delta_t_f = 15;
-  return power_kw / (500 / 12000 * delta_t_f);
+  return (power_kw * BTU_PER_KW) / (500 * delta_t_f);
 }
 
 function calculateCDUCount(rack_count: number): number {

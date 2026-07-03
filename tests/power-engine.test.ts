@@ -161,10 +161,13 @@ describe("Power Redundancy Engine", () => {
       expect(loading_rec).toBeDefined();
     });
 
-    it("should generate recommendation when UPS loading < 40%", () => {
+    it("should generate recommendation when UPS loading < 40% (non-dual-bus)", () => {
+      // Updated 2026-07-03 (CODE-AUDIT.md MAJOR-2): the original test used a 2N
+      // config, which encoded the bug — dual-bus topologies are intentionally
+      // <50% loaded and must NOT receive right-sizing advice. Use N instead.
       const input: PowerRedundancyInput = {
-        it_load_kw: 300,
-        redundancy_config: "2N",
+        it_load_kw: 100,
+        redundancy_config: "N",
         ups_module_size_kw: 500,
       };
       const result = calculatePowerRedundancy(input);
