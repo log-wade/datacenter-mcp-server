@@ -129,12 +129,15 @@ describe("UPS Sizing Engine", () => {
       };
       const result = calculateUPSSizing(input);
 
-      // Energy should be positive and in expected range
-      expect(result.battery_configuration.total_battery_energy_kwh).toBeGreaterThan(15);
-      expect(result.battery_configuration.total_battery_energy_kwh).toBeLessThan(25);
+      // Updated 2026-07-03 (CODE-AUDIT.md CRITICAL-1/2): the old 15–25 kWh bounds
+      // encoded ideal-energy math. With rate derating (0.34 usable @ 10 min,
+      // PHR-12550 data) and 1.25 aging: 22.22 / 0.34 × 1.25 ≈ 81.7 kWh nameplate.
+      expect(result.battery_configuration.total_battery_energy_kwh).toBeGreaterThan(70);
+      expect(result.battery_configuration.total_battery_energy_kwh).toBeLessThan(95);
+      expect(result.battery_configuration.deliverable_energy_kwh).toBeCloseTo(22.22, 0);
     });
 
-    it("should use default UPS efficiency of 0.95 when not specified", () => {
+    it("should use default UPS efficiency of 0.96 when not specified", () => {
       const input: UPSSizingInput = {
         critical_load_kw: 100,
         redundancy: "N",
@@ -143,9 +146,9 @@ describe("UPS Sizing Engine", () => {
       };
       const result = calculateUPSSizing(input);
 
-      // Energy should be reasonable for 100kW * 10min with 0.95 efficiency
-      expect(result.battery_configuration.total_battery_energy_kwh).toBeGreaterThan(15);
-      expect(result.battery_configuration.total_battery_energy_kwh).toBeLessThan(25);
+      // 120kW design × (10/60) / 0.96 = 20.83 deliverable → /0.34 × 1.25 ≈ 76.6 nameplate
+      expect(result.battery_configuration.total_battery_energy_kwh).toBeGreaterThan(65);
+      expect(result.battery_configuration.total_battery_energy_kwh).toBeLessThan(90);
     });
 
     it("should increase battery energy with custom efficiency of 0.85", () => {
@@ -172,7 +175,7 @@ describe("UPS Sizing Engine", () => {
       );
     });
 
-    it("should scale battery energy linearly with runtime", () => {
+    it("should scale battery energy sub-linearly with runtime (rate derating eases)", () => {
       const input_10min: UPSSizingInput = {
         critical_load_kw: 100,
         redundancy: "N",
@@ -189,8 +192,14 @@ describe("UPS Sizing Engine", () => {
       };
       const result_20min = calculateUPSSizing(input_20min);
 
+      // Updated 2026-07-03 (CRITICAL-1/2): nameplate energy no longer scales
+      // linearly with runtime — the usable fraction improves at longer rates
+      // (0.34 @ 10 min vs 0.49 @ 20 min), so the ratio is 2 × (0.34/0.49) ≈ 1.39.
       const ratio = result_20min.battery_configuration.total_battery_energy_kwh / result_10min.battery_configuration.total_battery_energy_kwh;
-      expect(ratio).toBeCloseTo(2, 1);
+      expect(ratio).toBeCloseTo(1.39, 1);
+      // Deliverable energy (load side) DOES scale linearly:
+      const deliverable_ratio = (result_20min.battery_configuration.deliverable_energy_kwh ?? 0) / (result_10min.battery_configuration.deliverable_energy_kwh ?? 1);
+      expect(deliverable_ratio).toBeCloseTo(2, 1);
     });
   });
 
@@ -268,7 +277,8 @@ describe("UPS Sizing Engine", () => {
       const result = calculateUPSSizing(input);
 
       const expected_weight_lbs = result.battery_configuration.total_battery_energy_kwh * 25;
-      expect(result.battery_room_footprint.estimated_weight_lbs).toBeCloseTo(expected_weight_lbs, 0);
+      // Precision -1 (±5 lbs): output is integer-rounded, so exact .5 boundaries can differ
+      expect(result.battery_room_footprint.estimated_weight_lbs).toBeCloseTo(expected_weight_lbs, -1);
     });
 
     it("should show lithium-ion is significantly lighter than VRLA", () => {
@@ -469,8 +479,10 @@ describe("UPS Sizing Engine", () => {
       };
       const result = calculateUPSSizing(input);
 
+      // Updated 2026-07-03 (CRITICAL-1/2): 5-min VRLA is the harshest derating
+      // (0.23 usable, PHR-12550 data): 10.42 / 0.23 × 1.25 ≈ 56.6 kWh nameplate.
       expect(result.battery_configuration.total_battery_energy_kwh).toBeGreaterThan(0);
-      expect(result.battery_configuration.total_battery_energy_kwh).toBeLessThan(20);
+      expect(result.battery_configuration.total_battery_energy_kwh).toBeLessThan(70);
     });
 
     it("should handle 60-minute runtime", () => {

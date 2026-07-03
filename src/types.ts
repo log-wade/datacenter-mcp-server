@@ -204,6 +204,8 @@ export interface UPSSizingInput {
   battery_type: BatteryType;
   ups_efficiency?: number;
   growth_factor?: number;
+  /** End-of-life aging factor per IEEE 485 practice (default 1.25). */
+  aging_factor?: number;
 }
 
 export interface UPSModuleConfiguration {
@@ -220,7 +222,17 @@ export interface BatteryStringConfiguration {
   nominal_voltage: number;
   energy_per_unit_wh: number;
   strings_required: number;
+  /** Total required NAMEPLATE energy across all buses (drives footprint/cost). */
   total_battery_energy_kwh: number;
+  /** Energy the load actually draws through the UPS (P × t / η). */
+  deliverable_energy_kwh?: number;
+  /** Usable fraction of nameplate at this runtime (constant-power rate derating). */
+  rate_derating_factor?: number;
+  /** End-of-life aging factor applied (IEEE 485 practice). */
+  aging_factor?: number;
+  /** Independent battery buses (2 for 2N/2N+1 — each bus carries full load). */
+  independent_bus_count?: number;
+  strings_per_bus?: number;
 }
 
 export interface BatteryRoomFootprint {

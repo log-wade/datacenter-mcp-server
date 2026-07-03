@@ -4,15 +4,14 @@
 // is wrong, not the code. Never adjust an expected value to make a test pass;
 // adjust it only when the cited source says so.
 //
-// Status legend:
-//   [ACTIVE]  — verifiable arithmetic/logic; must pass today
-//   [PENDING] — encodes corrected physics per CODE-AUDIT.md; `it.skip` until
-//               CRITICAL-1/2 and MAJOR-1 are fixed, then enable. DO NOT DELETE.
-//
-// Sources to attach per case before de-beta (see Engineering QA Protocol):
-//   - IEEE 485 (lead-acid sizing methodology: rate-adjusted capacity, 1.25 aging factor)
-//   - Manufacturer constant-power tables at 10/15-min rates (Eaton/Vertiv published data)
-//   - Logan's verified past project calcs (anonymized)
+// Battery physics source (CRITICAL-1/2 fix, 2026-07-03):
+//   Power-Sonic PHR-12550 (12V/155Ah high-rate UPS VRLA) published
+//   constant-power discharge table @ 1.67 V/cell end voltage:
+//   15 min → 540.1 W/cell × 6 cells × 0.25 h ÷ 1,860 Wh nameplate = 0.44 usable.
+//   URL: power-sonic.com/product/phr-12550 (retrieved 2026-07-03).
+//   Aging factor 1.25 per IEEE 485 end-of-life sizing practice.
+//   Li-ion curve is a conservative estimate — replace with manufacturer data
+//   before de-beta (tracked in CODE-AUDIT.md).
 
 import { calculateUPSSizing } from "../../src/services/ups-sizing-engine.js";
 import type { UPSSizingInput } from "../../src/types.js";
@@ -39,56 +38,63 @@ describe("GOLDEN: UPS module arithmetic [ACTIVE]", () => {
     expect(calculateUPSSizing({ ...base, redundancy: "2N+1" }).ups_configuration.modules_required).toBe(5);
   });
 
-  it("ideal energy math sanity: 500kW design, 15 min, η=0.96 → 130.2 kWh ideal", () => {
-    // E = 500 × (15/60) / 0.96 = 130.21 kWh. This verifies the CURRENT formula's
-    // arithmetic only — the formula itself is flagged CRITICAL-1 (no rate derating).
+  it("deliverable energy: 500kW design, 15 min, η=0.96 → 130.2 kWh through the UPS", () => {
+    // E = 500 × (15/60) / 0.96 = 130.21 kWh — what the load draws; NOT the
+    // battery nameplate (see rate-derated tests below).
     const r = calculateUPSSizing({
       critical_load_kw: 500 / 1.2, redundancy: "N", runtime_minutes: 15,
       battery_type: "VRLA", ups_efficiency: 0.96, growth_factor: 1.2,
     });
-    expect(r.battery_configuration.total_battery_energy_kwh).toBeCloseTo(130.21, 0);
+    expect(r.battery_configuration.deliverable_energy_kwh).toBeCloseTo(130.21, 0);
   });
 });
 
-describe("GOLDEN: rate-adjusted battery sizing [PENDING — enable after CRITICAL-1/2 fix]", () => {
-  // Reference case (verify against IEEE 485 worked example + one manufacturer
-  // constant-power table before enabling; record source in this comment):
-  //
-  // 500 kW design load, 15-minute runtime, VRLA, η = 0.96
-  //   Ideal energy:        130.2 kWh
-  //   Rate derating @15min: ~0.55 usable fraction (VRLA, typical high-rate bloc)  [VERIFY vs mfr table]
-  //   Aging factor:         1.25 (IEEE 485)
-  //   Required nameplate:   130.2 / 0.55 × 1.25 ≈ 296 kWh  → ~2.3× the ideal figure
-  //
-  // The current engine returns ~130 kWh — roughly HALF the defensible nameplate.
+describe("GOLDEN: rate-adjusted battery sizing [ACTIVE — CRITICAL-1/2 fixed 2026-07-03]", () => {
+  // 500 kW design, 15-min runtime, VRLA, η = 0.96, aging 1.25:
+  //   deliverable:  130.21 kWh
+  //   ÷ 0.44 usable @ 15 min (PHR-12550 table) = 295.93 kWh
+  //   × 1.25 aging (IEEE 485)                  = 369.9 kWh nameplate
+  // The pre-fix engine returned 130.2 kWh — 2.8× undersized.
 
-  it.skip("500kW/15min VRLA → nameplate energy ≈ 296 kWh (±10%), not 130 kWh", () => {
+  it("500kW/15min VRLA → nameplate ≈ 370 kWh (±10%), not 130 kWh", () => {
     const r = calculateUPSSizing({
       critical_load_kw: 500 / 1.2, redundancy: "N", runtime_minutes: 15,
       battery_type: "VRLA", ups_efficiency: 0.96, growth_factor: 1.2,
     });
     const kwh = r.battery_configuration.total_battery_energy_kwh;
-    expect(kwh).toBeGreaterThan(296 * 0.9);
-    expect(kwh).toBeLessThan(296 * 1.1);
+    expect(kwh).toBeGreaterThan(369.9 * 0.9);
+    expect(kwh).toBeLessThan(369.9 * 1.1);
+    expect(r.battery_configuration.rate_derating_factor).toBeCloseTo(0.44, 2);
   });
 
-  it.skip("Li-ion applies usable-DoD factor (nameplate > ideal energy)", () => {
+  it("Li-ion applies DoD/rate + aging (≈191.5 kWh nameplate for same case)", () => {
     const r = calculateUPSSizing({
       critical_load_kw: 500 / 1.2, redundancy: "N", runtime_minutes: 15,
       battery_type: "lithium_ion", ups_efficiency: 0.96, growth_factor: 1.2,
     });
-    // With 90% usable DoD + aging, nameplate must exceed the 130.2 kWh ideal figure.
+    // 130.21 / 0.85 × 1.25 = 191.5 (conservative Li-ion estimate)
+    expect(r.battery_configuration.total_battery_energy_kwh).toBeCloseTo(191.5, 0);
     expect(r.battery_configuration.total_battery_energy_kwh).toBeGreaterThan(130.21);
   });
 
-  it.skip("2N topology → battery plant per bus (2× strings vs N) [MAJOR-1]", () => {
+  it("2N topology → battery plant per bus (2× strings and 2× energy vs N) [MAJOR-1 fixed]", () => {
     const base: UPSSizingInput = {
       critical_load_kw: 800, redundancy: "N", runtime_minutes: 10,
       battery_type: "VRLA", growth_factor: 1.2,
     };
-    const n = calculateUPSSizing(base).battery_configuration.strings_required;
-    const twoN = calculateUPSSizing({ ...base, redundancy: "2N" }).battery_configuration.strings_required;
-    expect(twoN).toBe(n * 2);
+    const n = calculateUPSSizing(base).battery_configuration;
+    const twoN = calculateUPSSizing({ ...base, redundancy: "2N" }).battery_configuration;
+    expect(twoN.strings_required).toBe(n.strings_required * 2);
+    expect(twoN.total_battery_energy_kwh).toBeCloseTo(n.total_battery_energy_kwh * 2, 0);
+    expect(twoN.independent_bus_count).toBe(2);
+  });
+
+  it("shorter runtime → harsher derating (5 min usable fraction ≈ 0.23 VRLA)", () => {
+    const r = calculateUPSSizing({
+      critical_load_kw: 500, redundancy: "N", runtime_minutes: 5,
+      battery_type: "VRLA",
+    });
+    expect(r.battery_configuration.rate_derating_factor).toBeCloseTo(0.23, 2);
   });
 });
 
@@ -100,5 +106,17 @@ describe("GOLDEN: recommendation logic [ACTIVE — MAJOR-2 fixed 2026-07-03]", (
     });
     const rightSizing = r.recommendations.filter((x) => x.toLowerCase().includes("right-siz"));
     expect(rightSizing).toHaveLength(0);
+  });
+
+  it("methodology note discloses derating, aging, and bus count", () => {
+    const r = calculateUPSSizing({
+      critical_load_kw: 400, redundancy: "2N", runtime_minutes: 15,
+      battery_type: "VRLA",
+    });
+    const note = r.recommendations.find((x) => x.includes("Sizing methodology"));
+    expect(note).toBeDefined();
+    expect(note).toContain("44%");
+    expect(note).toContain("1.25");
+    expect(note).toContain("2 independent");
   });
 });
