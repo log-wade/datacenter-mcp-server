@@ -3,6 +3,10 @@
   "version": "1.1.0",
   "description": "Mission-critical data center design & engineering MCP server. Provides cooling load calculations, power redundancy analysis, tier classification assessment, and commissioning workflow tools for AI agents.",
   "main": "dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./engines": "./dist/engines.js"
+  },
   "bin": {
     "datacenter-mcp-server": "dist/index.js"
   },
