@@ -1,5 +1,5 @@
 # Publish datacenter-mcp-server to npm when a version tag is pushed.
-# One-time setup: add NPM_TOKEN (Automation token) to repo secrets.
+# One-time setup: add NPM_TOKEN (Automation token with bypass 2FA) to repo secrets.
 # After that: npm version minor && git push --tags is the publish.
 name: Release
 
@@ -16,6 +16,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   publish:
@@ -24,6 +25,22 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag || github.ref }}
+
+      - name: Verify tag matches package.json version
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.tag }}" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          TAG_VERSION="${TAG#v}"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match package.json ($PKG_VERSION)"
+            exit 1
+          fi
+          echo "Publishing version $PKG_VERSION (tag $TAG)"
+          echo "VERSION=$PKG_VERSION" >> "$GITHUB_ENV"
 
       - uses: actions/setup-node@v4
         with:
@@ -44,6 +61,21 @@ jobs:
         run: npm run build
 
       - name: Publish to npm
-        run: npm publish --access public
+        run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Verify registry serves published version
+        run: |
+          EXPECTED="${VERSION}"
+          for i in 1 2 3 4 5 6; do
+            ACTUAL=$(npm view datacenter-mcp-server version 2>/dev/null || true)
+            if [ "$ACTUAL" = "$EXPECTED" ]; then
+              echo "Registry serves $EXPECTED"
+              exit 0
+            fi
+            echo "Attempt $i/6: registry has '${ACTUAL:-<none>}', expected '$EXPECTED'; waiting 10s..."
+            sleep 10
+          done
+          echo "::error::Registry did not serve $EXPECTED after 6 attempts (last: ${ACTUAL:-<none>})"
+          exit 1
