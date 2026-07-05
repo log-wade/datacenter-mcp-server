@@ -9,7 +9,8 @@ describe("engines facade", () => {
   it("executeTool runs cooling load with canonical schema", () => {
     const result = executeTool("dc_calculate_cooling_load", {
       it_load_kw: 100,
-      pue: 1.4,
+      pue: 1.0,
+      safety_factor: 1.0,
     }) as { cooling_load_tons: number };
 
     expect(result.cooling_load_tons).toBeCloseTo(28.43, 1);
@@ -21,10 +22,10 @@ describe("engines facade", () => {
       redundancy: "N+1",
       runtime_minutes: 15,
       battery_type: "VRLA",
-    }) as { rate_derating_factor: number; aging_factor: number };
+    }) as { battery_configuration: { rate_derating_factor: number; aging_factor: number } };
 
-    expect(result.rate_derating_factor).toBe(0.44);
-    expect(result.aging_factor).toBe(1.25);
+    expect(result.battery_configuration.rate_derating_factor).toBe(0.44);
+    expect(result.battery_configuration.aging_factor).toBe(1.25);
   });
 
   it("throws on unknown tool", () => {
